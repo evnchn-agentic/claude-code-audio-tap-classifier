@@ -52,20 +52,29 @@ Phase 1 (drums) uses **pitch-invariant** features — same instrument clusters t
 | MFCCs [1-5] | 5 | Full spectral detail (pitch-sensitive, intentionally) |
 | Spectral contrast mean | 1 | Peak-vs-valley structure |
 
+### Approach
+
+- **Per-file clustering**: Each file is clustered independently (KMeans k=2) to prevent between-file material differences from masking within-file solid/hollow variance
+- **Label assignment**: Bandwidth-based heuristic — lower bandwidth cluster = HOLLOW (tonal resonance), higher = SOLID (broadband damped)
+- **Prediction overlay videos**: Visual verification via `tap_video_overlay.py` — composites classification banners onto source video with 1s persistence
+
 ### Results
 
-- 115 audible taps across 2 files, binary KMeans silhouette=0.200
+- 182 audible taps across 2 files (MIN_TAP_RMS=0.004, noise floor ~0.002)
 - Primary discriminator: **bandwidth** (tonal resonance vs broadband thud)
-- HOLLOW: bandwidth=1934 Hz, flatness=0.047 (narrow, tonal — resonant void)
-- SOLID: bandwidth=2331 Hz, flatness=0.125 (wide, noisy — damped by substrate)
-- Strong per-file separation: tile1 = 76% SOLID, tile2 = 85% HOLLOW
+- HOLLOW: bandwidth=2024–2326 Hz, flatness=0.058–0.122 (narrow, tonal — resonant void)
+- SOLID: bandwidth=2398–2608 Hz, flatness=0.020–0.096 (wide, noisy — damped by substrate)
+- tile1: 83 taps — 14 SOLID (17%), 69 HOLLOW (83%), silhouette=0.340
+- tile2: 99 taps — 7 SOLID (7%), 92 HOLLOW (93%), silhouette=0.484
+- Both files correctly show hollow-majority, matching ground truth
 
 ## Scripts
 
 | Script | Purpose |
 |--------|---------|
 | `extract_drums.py` | Unsupervised drum classifier (pitch-invariant features + KMeans) |
-| `tap_classify.py` | Binary tap-test classifier (pitch-sensitive features + KMeans) |
+| `tap_classify.py` | Binary tap-test classifier (pitch-sensitive features + per-file KMeans) |
+| `tap_video_overlay.py` | Overlay prediction banners onto source video for visual verification |
 | `extract_ground_truth.py` | Visual ground truth from video frame differencing |
 | `cross_validate.py` | Audio vs visual cross-validation |
 | `analyze_structure.py` | Audio structure analysis (segments, tempo) |
@@ -93,6 +102,7 @@ python cross_validate.py
 # Phase 2: Tap-test classification
 python tap_classify.py                     # uses tile1.opus, tile2.opus by default
 python tap_classify.py myfile1.opus myfile2.opus  # custom files
+python tap_video_overlay.py                # overlay predictions on video (needs tile*-video.webm)
 
 # Outputs go to output/ and frames/
 ```

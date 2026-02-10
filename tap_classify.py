@@ -60,7 +60,7 @@ SR = 22050
 ONSET_WINDOW = 0.08       # 80ms window after onset for feature extraction
 ONSET_DELTA = 0.08        # onset detection sensitivity
 ONSET_WAIT = 4            # minimum frames between onsets
-MIN_TAP_RMS = 0.015       # skip quiet "taps" — focus on clearly audible strikes
+MIN_TAP_RMS = 0.004       # skip noise; lowered from 0.015 to catch quieter taps (noise floor ~0.002)
 
 
 # ============================================================
@@ -287,78 +287,94 @@ for audio_file in AUDIO_FILES:
 
 
 # ============================================================
-# 4. Binary clustering (unsupervised)
+# 4. Per-file binary clustering (unsupervised)
 # ============================================================
+# Key insight: clustering across files separates by tile type (room/material)
+# rather than structural condition (solid/hollow). Within-file variance is the
+# diagnostic signal, so we cluster EACH FILE INDEPENDENTLY.
 print("\n" + "=" * 60)
-print("BINARY CLUSTERING")
+print("PER-FILE BINARY CLUSTERING")
 print("=" * 60)
 
+BANDWIDTH_IDX = 1
+FLATNESS_IDX = 3
+CLASS_COLORS = {'HOLLOW': '#e74c3c', 'SOLID': '#2ecc71'}
+
+# We'll fill class_labels per-file
+class_labels = np.empty(len(all_taps), dtype='U10')
+sil_scores = {}
+
+for audio_file in AUDIO_FILES:
+    file_mask = np.array([t['file'] == audio_file for t in all_taps])
+    file_indices = np.where(file_mask)[0]
+    file_features = all_features[file_indices]
+    n_file = len(file_indices)
+
+    print(f"\n{audio_file} ({n_file} taps):")
+
+    if n_file < 4:
+        print(f"  Too few taps for clustering, marking all HOLLOW")
+        class_labels[file_indices] = 'HOLLOW'
+        sil_scores[audio_file] = 0.0
+        continue
+
+    # Scale features independently per file
+    file_scaler = StandardScaler()
+    file_scaled = file_scaler.fit_transform(file_features)
+
+    # Binary KMeans
+    km = KMeans(n_clusters=2, n_init=20, random_state=42)
+    file_labels = km.fit_predict(file_scaled)
+    sil = silhouette_score(file_scaled, file_labels)
+    sil_scores[audio_file] = sil
+
+    print(f"  k=2 silhouette={sil:.3f}")
+
+    # Assign HOLLOW/SOLID by bandwidth within this file
+    # Lower bandwidth = tonal/resonant = HOLLOW
+    # Higher bandwidth = broadband/damped = SOLID
+    cluster_bw = []
+    for c in range(2):
+        c_mask = file_labels == c
+        median_bw = np.median(file_features[c_mask, BANDWIDTH_IDX])
+        cluster_bw.append((c, median_bw))
+
+    cluster_bw.sort(key=lambda x: x[1])
+    hollow_c = cluster_bw[0][0]
+    solid_c = cluster_bw[1][0]
+    file_class_map = {hollow_c: 'HOLLOW', solid_c: 'SOLID'}
+
+    for j, idx in enumerate(file_indices):
+        class_labels[idx] = file_class_map[file_labels[j]]
+
+    # Print per-file cluster stats
+    for c in range(2):
+        c_mask = file_labels == c
+        name = file_class_map[c]
+        n = np.sum(c_mask)
+        median_bw = np.median(file_features[c_mask, BANDWIDTH_IDX])
+        median_flat = np.median(file_features[c_mask, FLATNESS_IDX])
+        median_cent = np.median(file_features[c_mask, 0])
+        median_decay = np.median(file_features[c_mask, 11])
+        print(f"  {name:>8s}: {n} taps, bandwidth={median_bw:.0f} Hz, "
+              f"flatness={median_flat:.3f}, centroid={median_cent:.0f} Hz, "
+              f"decay={median_decay*1000:.1f} ms")
+
+# Also compute a global scaler + silhouette for reference
 scaler = StandardScaler()
 features_scaled = scaler.fit_transform(all_features)
 
-# Try k=2 (binary: solid vs hollow)
-km2 = KMeans(n_clusters=2, n_init=20, random_state=42)
-labels_2 = km2.fit_predict(features_scaled)
-sil_2 = silhouette_score(features_scaled, labels_2)
-
-# Also try k=3 for comparison (solid/hollow/ambiguous)
-km3 = KMeans(n_clusters=3, n_init=20, random_state=42)
-labels_3 = km3.fit_predict(features_scaled)
-sil_3 = silhouette_score(features_scaled, labels_3)
-
-print(f"  k=2: silhouette={sil_2:.3f}")
-print(f"  k=3: silhouette={sil_3:.3f}")
-
-# Use k=2 for binary classification
-labels = labels_2
-
-# Determine which cluster is "solid" vs "hollow"
-# Key physics:
-#   Solid substrate → energy absorbed → broadband thud → HIGHER bandwidth, HIGHER flatness
-#   Hollow void → resonance chamber → tonal ring → LOWER bandwidth, LOWER flatness
-# Bandwidth (feature 1) is the #1 discriminator per feature importance analysis.
-BANDWIDTH_IDX = 1
-FLATNESS_IDX = 3
-cluster_bandwidths = []
-for c in range(2):
-    mask = labels == c
-    median_bw = np.median(all_features[mask, BANDWIDTH_IDX])
-    cluster_bandwidths.append((c, median_bw))
-
-cluster_bandwidths.sort(key=lambda x: x[1])
-# Lower bandwidth = tonal/resonant = HOLLOW, higher bandwidth = broadband/damped = SOLID
-hollow_cluster = cluster_bandwidths[0][0]
-solid_cluster = cluster_bandwidths[1][0]
-
-CLASS_NAMES = {hollow_cluster: 'HOLLOW', solid_cluster: 'SOLID'}
-CLASS_COLORS = {'HOLLOW': '#e74c3c', 'SOLID': '#2ecc71'}
-
-# Remap labels to semantic names
-class_labels = np.array([CLASS_NAMES[l] for l in labels])
-
-print(f"\nCluster assignment (by bandwidth — primary discriminator):")
-for c in range(2):
-    mask = labels == c
-    name = CLASS_NAMES[c]
-    n = np.sum(mask)
-    median_bw = np.median(all_features[mask, BANDWIDTH_IDX])
-    median_flat = np.median(all_features[mask, FLATNESS_IDX])
-    median_cent = np.median(all_features[mask, 0])
-    median_decay = np.median(all_features[mask, 11])  # decay_rate
-    print(f"  {name:>8s}: {n} taps, bandwidth={median_bw:.0f} Hz, "
-          f"flatness={median_flat:.3f}, centroid={median_cent:.0f} Hz, "
-          f"decay={median_decay*1000:.1f} ms")
-
-# Per-file breakdown
+# Overall summary
 print(f"\nPer-file class distribution:")
 for audio_file in AUDIO_FILES:
     file_mask = np.array([t['file'] == audio_file for t in all_taps])
-    file_labels = class_labels[file_mask]
-    n_solid = np.sum(file_labels == 'SOLID')
-    n_hollow = np.sum(file_labels == 'HOLLOW')
-    total = len(file_labels)
+    file_labels_named = class_labels[file_mask]
+    n_solid = np.sum(file_labels_named == 'SOLID')
+    n_hollow = np.sum(file_labels_named == 'HOLLOW')
+    total = len(file_labels_named)
+    sil = sil_scores.get(audio_file, 0)
     print(f"  {audio_file}: {n_solid} SOLID ({n_solid/total:.0%}), "
-          f"{n_hollow} HOLLOW ({n_hollow/total:.0%})")
+          f"{n_hollow} HOLLOW ({n_hollow/total:.0%}), silhouette={sil:.3f}")
 
 
 # ============================================================
@@ -466,8 +482,9 @@ ax.set_xlabel('|Mean Difference| (standardized)')
 ax.set_title('Feature Importance (cluster separation)')
 ax.invert_yaxis()
 
-plt.suptitle(f'Tap-Test Binary Classification: {len(all_taps)} taps, '
-             f'silhouette={sil_2:.3f}',
+avg_sil = np.mean(list(sil_scores.values())) if sil_scores else 0
+plt.suptitle(f'Tap-Test Binary Classification (per-file): {len(all_taps)} taps, '
+             f'avg silhouette={avg_sil:.3f}',
              fontsize=13, fontweight='bold')
 plt.tight_layout()
 viz_path = os.path.join(OUTPUT_DIR, 'tap_classify.png')
@@ -544,8 +561,7 @@ print(f"Saved {wave_path}")
 results = {
     'audio_files': AUDIO_FILES,
     'n_taps': len(all_taps),
-    'silhouette_k2': round(sil_2, 4),
-    'silhouette_k3': round(sil_3, 4),
+    'per_file_silhouettes': {f: round(s, 4) for f, s in sil_scores.items()},
     'classes': {},
     'per_file': {},
     'feature_names': FEATURE_NAMES,
@@ -564,10 +580,11 @@ for cls_name in CLASS_COLORS:
 
 for audio_file in AUDIO_FILES:
     file_mask = np.array([t['file'] == audio_file for t in all_taps])
-    file_labels = class_labels[file_mask]
+    file_labels_out = class_labels[file_mask]
     results['per_file'][audio_file] = {
-        'n_solid': int(np.sum(file_labels == 'SOLID')),
-        'n_hollow': int(np.sum(file_labels == 'HOLLOW')),
+        'n_solid': int(np.sum(file_labels_out == 'SOLID')),
+        'n_hollow': int(np.sum(file_labels_out == 'HOLLOW')),
+        'silhouette': round(sil_scores.get(audio_file, 0), 4),
     }
 
 for i, tap in enumerate(all_taps):
