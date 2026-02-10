@@ -1,0 +1,13 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.python-version
+
+# Large media files (track with Git LFS or keep local)
+*.wav
+*.webm
+
+# Generated outputs (reproducible from scripts)
+output/
+frames/
