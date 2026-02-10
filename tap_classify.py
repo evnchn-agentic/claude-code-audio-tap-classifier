@@ -62,6 +62,13 @@ ONSET_DELTA = 0.08        # onset detection sensitivity
 ONSET_WAIT = 4            # minimum frames between onsets
 MIN_TAP_RMS = 0.004       # skip noise; lowered from 0.015 to catch quieter taps (noise floor ~0.002)
 
+# Hardcoded exclusion zones: {filename: [(start_s, end_s), ...]}
+# These non-tap events (footsteps, thuds) are indistinguishable from taps using
+# audio alone — accelerometer/IMU data would be needed to reject them automatically.
+EXCLUDE_ZONES = {
+    'tile2.opus': [(19.5, 22.5)],
+}
+
 
 # ============================================================
 # 1. Load audio and detect onsets
@@ -88,9 +95,21 @@ for audio_file in AUDIO_FILES:
     )
     print(f"  Raw onsets: {len(onsets)}")
 
-    # Filter by RMS — skip silence
+    # Filter by RMS — skip silence; also skip hardcoded exclusion zones
+    exclude_zones = EXCLUDE_ZONES.get(os.path.basename(audio_file), [])
     kept = 0
+    excluded = 0
     for t in onsets:
+        # Check exclusion zones
+        in_zone = False
+        for zone_start, zone_end in exclude_zones:
+            if zone_start <= t <= zone_end:
+                in_zone = True
+                break
+        if in_zone:
+            excluded += 1
+            continue
+
         center = int(t * sr)
         end = min(len(y), center + int(ONSET_WINDOW * sr))
         chunk = y[center:end]
@@ -109,6 +128,8 @@ for audio_file in AUDIO_FILES:
         all_chunks.append(chunk)
         kept += 1
 
+    if excluded > 0:
+        print(f"  Excluded {excluded} onsets in hardcoded zones")
     print(f"  Kept taps (rms > {MIN_TAP_RMS}): {kept}")
 
 print(f"\nTotal taps across all files: {len(all_taps)}")

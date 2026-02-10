@@ -56,17 +56,23 @@ Phase 1 (drums) uses **pitch-invariant** features — same instrument clusters t
 
 - **Per-file clustering**: Each file is clustered independently (KMeans k=2) to prevent between-file material differences from masking within-file solid/hollow variance
 - **Label assignment**: Bandwidth-based heuristic — lower bandwidth cluster = HOLLOW (tonal resonance), higher = SOLID (broadband damped)
+- **Hardcoded exclusion zones** for known non-tap events (e.g., tile2 ~20-22s walking thuds) — see Limitations below
 - **Prediction overlay videos**: Visual verification via `tap_video_overlay.py` — composites classification banners onto source video with 1s persistence
 
 ### Results
 
-- 182 audible taps across 2 files (MIN_TAP_RMS=0.004, noise floor ~0.002)
+- 178 audible taps across 2 files (MIN_TAP_RMS=0.004, noise floor ~0.002)
 - Primary discriminator: **bandwidth** (tonal resonance vs broadband thud)
-- HOLLOW: bandwidth=2024–2326 Hz, flatness=0.058–0.122 (narrow, tonal — resonant void)
-- SOLID: bandwidth=2398–2608 Hz, flatness=0.020–0.096 (wide, noisy — damped by substrate)
+- HOLLOW: bandwidth=2150 Hz, flatness=0.082 (narrow, tonal — resonant void)
+- SOLID: bandwidth=2556 Hz, flatness=0.139 (wide, noisy — damped by substrate)
 - tile1: 83 taps — 14 SOLID (17%), 69 HOLLOW (83%), silhouette=0.340
-- tile2: 99 taps — 7 SOLID (7%), 92 HOLLOW (93%), silhouette=0.484
+- tile2: 95 taps — 36 SOLID (38%), 59 HOLLOW (62%), silhouette=0.251
 - Both files correctly show hollow-majority, matching ground truth
+
+### Limitations
+
+- **Non-tap events are indistinguishable from taps using audio alone.** Walking thuds, footsteps, and accidental impacts produce broadband transients similar to tap events. The current system uses hardcoded exclusion zones (e.g., tile2 ~20-22s) to reject known non-tap events, but this does not generalise.
+- **Accelerometer/IMU data is likely needed** for robust tap detection in field conditions. A multi-modal approach combining audio classification with accelerometer-based gesture recognition (detecting the deliberate tap motion) would allow automatic rejection of incidental impacts without manual exclusion zones.
 
 ## Scripts
 
