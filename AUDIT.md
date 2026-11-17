@@ -5,17 +5,18 @@ the labels come in runs over time. But the evidence does not show that the split
 
 - **Loudness drives much of the split.** It sorts taps by how hard they were struck almost as much
   as by what they sound like.
-- **Most taps fall back to HOLLOW when struck hard.** Quiet taps are labelled SOLID 75 to 100% of the
-  time; taps with rms of 0.015 or more are labelled SOLID 0 to 19% of the time.
+- **Most taps fall back to HOLLOW when struck hard.** The quietest taps (rms below 0.008) are all
+  labelled SOLID in both files, and in tile2 so are 75% of the next band. Taps with rms of 0.015 or
+  more are labelled SOLID only 0 to 19% of the time.
 - **Quieting a tap is enough to relabel it.** Taking a HOLLOW tap, scaling it down and mixing in the
-  room's own background noise moves 20 to 50% of them to the SOLID side, though nothing about the
+  room's own background noise moves 17 to 53% of them to the SOLID side, though nothing about the
   tile changed.
 - **The two files are not split along the same axis.** In tile1, the label rule contradicts two of
   the three cues the README gives for hollowness.
 
 The README's line "Both files correctly show hollow-majority, matching ground truth" has no per-tap
-labels behind it. A per-file majority is a weak check: any rule that splits unevenly gets it right
-for both files about one time in four.
+labels behind it. A per-file majority is a weak check: a rule that carries no information but
+picks a side at random per file gets both files right one time in four.
 
 Everything below comes from `python audit_tap_split.py` on the files in this repo. It is seeded and
 deterministic, and `--selfcheck` confirms the null test separates a one-blob case from a two-blob
@@ -31,7 +32,7 @@ case. Versions used: Python 3.12.11, librosa 1.0.1, scikit-learn 1.9.1, numpy 2.
 | A | Cues that agree the HOLLOW cluster is hollow (lower bandwidth / flatness / centroid) | 1 of 3 | 3 of 3 | In tile1 only bandwidth agrees, and it is the weakest separator (d = −0.73). The HOLLOW cluster there is *brighter* (centroid +2.27 d) and noisier, which the README attributes to SOLID. |
 | F | Correlation of the two files' 20-D effect-size vectors | r = +0.38 | | The single label covers two largely different splits. |
 | C | SOLID share by tap rms, low to high: [0.004, 0.008), [0.008, 0.015), [0.015, 0.03), ≥ 0.03 | 100 / 30 / 0 / 4% | 100 / 75 / 19 / 5% | Strongly tied to strike strength. |
-| C | HOLLOW taps rescaled to the SOLID median rms plus background, then to rms 0.006 plus background | 12/69, then 24/69 move to SOLID | 15/59, then 31/59 | Signal-to-background ratio alone can flip the label. Scaling without the background flips none (0/69, 0/59), so the flips need the background, not just a lower level. |
+| C | HOLLOW taps rescaled to the SOLID median rms plus background, then to rms 0.006 plus background | 12/69, then 24/69 move to SOLID | 15/59, then 31/59 | Signal-to-background ratio alone can flip the label. Scaling without the background flips none (0/69, 0/59), so the flips need the background, not just a lower level. The chunk already holds some ambience, so the added background slightly overstates the room's level. |
 | D | Taps whose envelope never drops below 10% of peak within the 80 ms window | 42/83 | 79/95 | The `decay_rate` feature mostly measures the window length. Hollow tiles ring longer, which is the cue this feature should capture, and the window cuts it off. |
 | E | SOLID tap times | scattered | bursts at 11.1–11.7 s, 35.0–35.7 s and 38.8–39.3 s, about 5 taps per second | The bursts are rapid light tapping, a different technique from single strikes. |
 

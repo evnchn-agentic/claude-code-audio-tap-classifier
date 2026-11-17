@@ -1,5 +1,6 @@
 """
-Audit of tap_classify.py's SOLID/HOLLOW split. Writes nothing; prints numbers.
+Audit of tap_classify.py's SOLID/HOLLOW split. Prints numbers; it re-runs
+tap_classify.py, which regenerates output/ as usual.
 See AUDIT.md for what the numbers mean.
 
     python audit_tap_split.py              # run the audit on tile1.opus / tile2.opus
@@ -62,7 +63,7 @@ def main():
                 'flatness lower': np.median(F[h, 3]) < np.median(F[~h, 3]),
                 'centroid lower': np.median(F[h, 0]) < np.median(F[~h, 0])}
         print('  A. stated cues that agree the HOLLOW cluster is the hollow one:',
-              ', '.join(f'{k}={bool(v)}' for k, v in cues.items()))
+              ', '.join(f'{k}={bool(v)}' for k, v in cues.items()), f'(bandwidth d={d[1]:+.2f})')
 
         # B. is there structure at all, and is the split stable
         sil, null = silhouette_score(Z, km(Z)), null_silhouette(Z, rng)
