@@ -67,7 +67,7 @@ Phase 1 (drums) uses **pitch-invariant** features — same instrument clusters t
 - SOLID: bandwidth=2556 Hz, flatness=0.139 (wide, noisy — damped by substrate)
 - tile1: 83 taps — 14 SOLID (17%), 69 HOLLOW (83%), silhouette=0.340
 - tile2: 95 taps — 36 SOLID (38%), 59 HOLLOW (62%), silhouette=0.251
-- Both files correctly show hollow-majority, matching ground truth
+- Both files show a hollow majority. No per-tap labels exist yet, and [AUDIT.md](AUDIT.md) finds the split tracks tap loudness about as much as hollowness
 
 ### Limitations
 
@@ -81,6 +81,7 @@ Phase 1 (drums) uses **pitch-invariant** features — same instrument clusters t
 | `extract_drums.py` | Unsupervised drum classifier (pitch-invariant features + KMeans) |
 | `tap_classify.py` | Binary tap-test classifier (pitch-sensitive features + per-file KMeans) |
 | `tap_video_overlay.py` | Overlay prediction banners onto source video for visual verification |
+| `audit_tap_split.py` | Stress-tests the tap split (null, stability, loudness, decay censoring); see AUDIT.md |
 | `extract_ground_truth.py` | Visual ground truth from video frame differencing |
 | `cross_validate.py` | Audio vs visual cross-validation |
 | `analyze_structure.py` | Audio structure analysis (segments, tempo) |
